@@ -1,5 +1,52 @@
 # InternLM 第四课
 
+## 0.课程笔记
+
+1. **两种finetune范式**：
+  
+  ![屏幕截图 2024-04-16 105742](https://github.com/Hoder-zyf/InternLM/assets/73508057/afc8c63a-c439-4d6f-ab91-ee6c7f57f9ed)
+
+  
+2. **几种微调对比**：
+  
+  ![屏幕截图 2024-04-16 110237](https://github.com/Hoder-zyf/InternLM/assets/73508057/4df20061-aa6c-4503-8874-49020de266f6)
+
+  
+3. **XTuner**:轻量级：对于7B模型，微调最小显存为8GB(可以在colab上)
+  
+4. **XTuner**的两个优化技巧：
+  
+  - **Flash Attention**:将Attention的计算并行化，原始的Attention是N^2，改变后通过减少内存读写量，避免使用大规模中间矩阵，把N^2降到线性。
+    
+    ---
+    
+    **想象一下，你在一个图书馆里找书。传统注意力机制就像你在没有任何帮助的情况下，在成千上万的书架上一本一本地寻找你需要的书。这非常耗时，而且随着图书馆（序列长度）的增大，你需要花费的时间和记忆的书架数量（内存）也会急剧增加。**
+    
+    **现在，FlashAttention就像是有一个高效的图书管理系统。它知道哪些书在你的视野范围内（利用快速的SRAM），并且能够快速地告诉你哪些书是相关的（分块计算）。这样，你就不需要记住整个图书馆的布局，也不需要逐个检查每一个书架。当你需要找下一本书时，系统会迅速地帮你定位到相关区域，而不需要你走遍整个图书馆。**
+    
+    **此外，FlashAttention还像是一个智能助手，当你完成一次搜索后，它会记住你之前找到的书的位置和相关信息。所以，下次当你需要相同的信息时，它可以直接告诉你去哪里找，而不是让你重新开始搜索（重计算）。这样不仅节省了时间，也减少了你需要记住的信息量（减少了内存使用）。**
+    
+    **通过这种方式，FlashAttention使得在大型数据集（大型图书馆）中寻找信息（注意力计算）变得更加快速和高效，同时确保了你找到的信息是准确和相关的。**
+    
+  - **DeepSpeed ZeRO**:将训练过程中的参数、梯度和优化器状态切片保存，在多GPU训练时显著提升显存（需要手动开启 --deepspeed)
+    
+    ![屏幕截图 2024-04-16 111340](https://github.com/Hoder-zyf/InternLM/assets/73508057/e4d23ce1-8c28-40cb-b9bc-9cb2c6692475)
+
+    
+5. **多模态LLM原理**：
+  
+  ![屏幕截图 2024-04-16 112041](https://github.com/Hoder-zyf/InternLM/assets/73508057/1a33e0cb-6e44-4be3-b3d4-b3137d68556e)
+
+  
+6. **LLaVA**给LLM增加视觉能力的过程：分为Preetain和Finetune两个阶段：
+  
+  ![屏幕截图 2024-04-16 160627](https://github.com/Hoder-zyf/InternLM/assets/73508057/2ec0d10f-d045-47c6-b62b-7f5239cfbd34)
+
+  
+  Pretain类似LLM的预训练阶段（之后就已经有视觉能力，但是**无论用户问它什么，它都只会回答输入图片的标题。即，此时的模型只会给输入图像“写标题”**）；Finetune类似LLM的微调，使用`图片+复杂文本`数据对，来对Pretrain得到的结果进行进一步训练。
+  
+  **Finetune阶段可以借助GPT-4创建对应格式的微调json文件**
+
 ## 1.基础作业——XTuner 微调个人小助手认知
 
 1. **开发机**：50% A100 cuda 11.7
@@ -438,8 +485,124 @@
   
   ## 二.进阶作业
   
-  1. **将自我认知模型上传到OpenXLab**:[模型中心-OpenXLab](https://openxlab.org.cn/models/detail/amstrongzyf/HW4)
+ 1.**将自我认知模型上传到OpenXLab**:[模型中心-OpenXLab](https://openxlab.org.cn/models/detail/amstrongzyf/HW4)
+  
+ 2.**在OpenXLab上创造了相关应用**：[应用中心-OpenXLab](https://openxlab.org.cn/apps/detail/amstrongzyf/xtuner_hw4_deploy)
+  
+     唯一需要注意的点：是`requirements.txt`不是`requirement.txt`
+  
+ 3.**多模态微调**：
+  
+  - **使用刚刚创建的xtuner0.1.17环境**：conda activate xtuner0.1.17
     
-  2. **多模态微调**：由于时间原因以及算力点不足，没有进行。
+  - **Pretain阶段**：使用大量的`图片+简单文本（caption, 即图片标题）`数据对，使LLM理解图像中的**普遍特征**。即，对大量的图片进行**粗看**，但是由于Pretain阶段对硬件要求较高，我们这里直接使用Pretrain阶段的产物——`iter_2181.pth`文件。
     
-    计划参考[LLaVA/docs/Finetune_Custom_Data.md 在 main ·刘浩天/LLaVA --- LLaVA/docs/Finetune_Custom_Data.md at main · haotian-liu/LLaVA (github.com)](https://github.com/haotian-liu/LLaVA/blob/main/docs/Finetune_Custom_Data.md)，结合XTuner进行相关多模态微调。
+  - **FineTune阶段**：
+    
+    1. 制作训练数据：
+      
+      ```powershell
+      cd ~ 
+      git clone https://github.com/InternLM/tutorial -b camp2 
+      cd tutorial
+      
+      python /root/tutorial/xtuner/llava/llava_data/repeat.py \
+        -i /root/tutorial/xtuner/llava/llava_data/unique_data.json \
+        -o /root/tutorial/xtuner/llava/llava_data/repeated_data.json \
+        -n 200
+      ```
+      
+    2. 修改配置文件：按照教程修改配置文件
+      
+      关于`openai/clip-vit-large-patch14-336`：**这个模型结合了视觉和语言的能力，通过对比语言-图像预训练（CLIP）框架来实现其功能。它使用了Vision Transformer（ViT）架构中的ViT-L/14作为图像编码器，并采用了掩码自注意力Transformer作为文本编码器**。
+      
+      **百度贴吧的解答：是clip模型，给图片和提示词建立关联用的东西**
+      
+    3. 开始finetune:`cd /root/tutorial/xtuner/llava/
+      xtuner train /root/tutorial/xtuner/llava/llava_internlm2_chat_1_8b_qlora_clip_vit_large_p14_336_lora_e1_gpu8_finetune_copy.py --deepspeed deepspeed_zero2`
+      
+    4. 训练结果截图：
+      
+      ![屏幕截图 2024-04-16 165310](https://github.com/Hoder-zyf/InternLM/assets/73508057/2fb970e7-a7cb-42d2-b7fb-32877a486ba4)
+
+      
+  - 对比Finetune前后性能差异：
+    
+    1. **微调前：**
+      
+      - 默认图片
+        
+      
+      ```powershell
+      # 如果在 numpy 之前导入了 torch，那么这里的子进程将获得一个 GNU 线程层（即使父进程没有定义变量）
+      # 但是如果 numpy 在 Torch 之前被导入，子进程将获得一个 INTEL 线程层，这种情况会导致线程之间打架
+      # 以下两行代码可以解决这个小bug
+      export MKL_SERVICE_FORCE_INTEL=1
+      export MKL_THREADING_LAYER=GNU
+      
+      # pth转huggingface
+      xtuner convert pth_to_hf \
+        llava_internlm2_chat_1_8b_clip_vit_large_p14_336_e1_gpu8_pretrain \
+        /root/share/new_models/xtuner/iter_2181.pth \
+        /root/tutorial/xtuner/llava/llava_data/iter_2181_hf
+      
+      # 启动！
+      xtuner chat /root/share/new_models/Shanghai_AI_Laboratory/internlm2-chat-1_8b \
+        --visual-encoder /root/share/new_models/openai/clip-vit-large-patch14-336 \
+        --llava /root/tutorial/xtuner/llava/llava_data/iter_2181_hf \
+        --prompt-template internlm2_chat \
+        --image /root/tutorial/xtuner/llava/llava_data/test_img/oph.jpg
+      ```
+      
+     ![屏幕截图 2024-04-16 223325](https://github.com/Hoder-zyf/InternLM/assets/73508057/f2a389b4-8fe4-4f0e-8a08-61829cfca6f8)
+
+
+      
+      - cat.jpg(自己上传的图片)
+        
+        ![cat](https://github.com/Hoder-zyf/InternLM/assets/73508057/6552f25e-66e3-4207-babd-8fd9181725e0)
+
+        
+        ![屏幕截图 2024-04-16 175540](https://github.com/Hoder-zyf/InternLM/assets/73508057/37af7e4a-eadc-4b55-afd8-6883a681ebb1)
+
+        
+        **微调前的模型确实可以比较清楚的发现这个基础模型只能输出这个图片在讲什么，准确率还是不错的**
+        
+      
+      ---
+      
+    2. **微调后：**
+      
+      - 默认图片
+        
+      
+      ```powershell
+      # 解决小bug
+      export MKL_SERVICE_FORCE_INTEL=1
+      export MKL_THREADING_LAYER=GNU
+      
+      # pth转huggingface
+      xtuner convert pth_to_hf \
+        /root/tutorial/xtuner/llava/llava_internlm2_chat_1_8b_qlora_clip_vit_large_p14_336_lora_e1_gpu8_finetune_copy.py \
+        /root/tutorial/xtuner/llava/work_dirs/llava_internlm2_chat_1_8b_qlora_clip_vit_large_p14_336_lora_e1_gpu8_finetune_copy/iter_1200.pth \
+        /root/tutorial/xtuner/llava/llava_data/iter_1200_hf
+      
+      # 启动！
+      xtuner chat /root/share/new_models/Shanghai_AI_Laboratory/internlm2-chat-1_8b \
+        --visual-encoder /root/share/new_models/openai/clip-vit-large-patch14-336 \
+        --llava /root/tutorial/xtuner/llava/llava_data/iter_1200_hf \
+        --prompt-template internlm2_chat \
+        --image /root/tutorial/xtuner/llava/llava_data/test_img/oph.jpg
+      ```
+     
+    ![屏幕截图 2024-04-16 171620](https://github.com/Hoder-zyf/InternLM/assets/73508057/5a776289-ae66-40d1-8991-f320fe0fddc8)
+
+      
+      **我们可以发现微调之后有了明显的性能提升，但是当问及一些与图片无关的问题时，回答也不太行（过拟合了吧）**
+      
+      - cat.jpg
+        
+       ![屏幕截图 2024-04-16 174459](https://github.com/Hoder-zyf/InternLM/assets/73508057/a48ff990-7e4a-4205-8e7e-94dcb7320b81)
+
+        
+        **这个结果就很一般了，感觉还是训练数据太单一的问题**
