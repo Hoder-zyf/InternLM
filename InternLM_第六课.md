@@ -410,34 +410,31 @@ pip install lmdeploy==0.3.0
     ssh -CNg -L 7860:127.0.0.1:7860 -L 23333:127.0.0.1:23333 root@ssh.intern-ai.org.cn -p 43767
     ```
     
-  6. **本地打开[lagent-web](http://localhost:7860/):**
-    
-    在模型IP处输入`127.0.0.1:23333`,在插件选择处选择刚刚创建的`WeatherQuery`插件（就是刚刚weather中的`class`名称）
-    
-    ---
-    
-    **Q:为什么之前调用的ArxivSearch不见了呢?**
-    
-    **A:之前我们运行的是internlm2_agent_web_demo.py,现在运行的是internlm2_weather_web_demo.py**
-    
-    如果我们想把ArxivSearch加上，应该只要加上`from lagent.actions import ArxivSearch`，然后在第26行action_list部分加上ArxivSearch()即可。
-    
-    **效果如图（效果挺好）：** **同时调用ArxivSearch和WeatherQuery**
-    
-    ![屏幕截图 2024-04-23 110233](https://github.com/Hoder-zyf/InternLM/assets/73508057/d1bbd70f-c52d-4e31-b7ac-7a58a0f4863f)
+  6. **本地打开[lagent-web](http://localhost:7860/)：**
+
+在模型IP处输入`127.0.0.1:23333`,在插件选择处选择刚刚创建的`WeatherQuery`插件（就是刚刚weather中的`class`名称）
+
+---
+
+**Q:为什么之前调用的ArxivSearch不见了呢?**
+
+**A:之前我们运行的是internlm2_agent_web_demo.py,现在运行的是internlm2_weather_web_demo.py**
+
+如果我们想把ArxivSearch加上，应该只要加上`from lagent.actions import ArxivSearch`，然后在第26行action_list部分加上ArxivSearch()即可。
+
+**效果如图（效果挺好）：** **同时调用ArxivSearch和WeatherQuery**
+
+![屏幕截图 2024-04-23 110233](https://github.com/Hoder-zyf/InternLM/assets/73508057/da5d4ecf-eab3-497b-91ea-5e9754949970)
 
 
-    
-    ![屏幕截图 2024-04-23 110309](https://github.com/Hoder-zyf/InternLM/assets/73508057/9299d411-e7ee-4a39-8931-ef16fb0dd48e)
+![屏幕截图 2024-04-23 110309](https://github.com/Hoder-zyf/InternLM/assets/73508057/3987e8f1-9992-449f-a19f-91241826aebf)
 
-    
-    ---
-    
-    **天气查询：**`查询常州的天气`
-    
-    ![屏幕截图 2024-04-23 105601](https://github.com/Hoder-zyf/InternLM/assets/73508057/4e405f05-4c9b-4b75-9290-64593e24a709)
+---
 
-    
+**天气查询：**`查询常州的天气`
+![屏幕截图 2024-04-23 105601](https://github.com/Hoder-zyf/InternLM/assets/73508057/f5a77865-9284-4c53-a9f5-e776f95baf08)
+
+
 
 ### 3.使用 AgentLego自定义工具并调用
 
@@ -465,109 +462,107 @@ pip install lmdeploy==0.3.0
   from agentlego.types import Annotated, ImageIO, Info
   from agentlego.utils import require
   from .base import BaseTool
-  ```
   
   class MagicMakerImageGeneration(BaseTool):
   
+      default_desc = ('This tool can call the api of magicmaker to '
+                      'generate an image according to the given keywords.')
+  
+      styles_option = [
+          'dongman',  # 动漫
+          'guofeng',  # 国风
+          'xieshi',   # 写实
+          'youhua',   # 油画
+          'manghe',   # 盲盒
+      ]
+      aspect_ratio_options = [
+          '16:9', '4:3', '3:2', '1:1',
+          '2:3', '3:4', '9:16'
+      ]
+  
+      @require('opencv-python')
+      def __init__(self,
+                   style='guofeng',
+                   aspect_ratio='4:3'):
+          super().__init__()
+          if style in self.styles_option:
+              self.style = style
+          else:
+              raise ValueError(f'The style must be one of {self.styles_option}')
+          
+          if aspect_ratio in self.aspect_ratio_options:
+              self.aspect_ratio = aspect_ratio
+          else:
+              raise ValueError(f'The aspect ratio must be one of {aspect_ratio}')
+  
+      def apply(self,
+                keywords: Annotated[str,
+                                    Info('A series of Chinese keywords separated by comma.')]
+          ) -> ImageIO:
+          import cv2
+          response = requests.post(
+              url='https://magicmaker.openxlab.org.cn/gw/edit-anything/api/v1/bff/sd/generate',
+              data=json.dumps({
+                  "official": True,
+                  "prompt": keywords,
+                  "style": self.style,
+                  "poseT": False,
+                  "aspectRatio": self.aspect_ratio
+              }),
+              headers={'content-type': 'application/json'}
+          )
+          image_url = response.json()['data']['imgUrl']
+          image_response = requests.get(image_url)
+          image = cv2.cvtColor(cv2.imdecode(np.frombuffer(image_response.content, np.uint8), cv2.IMREAD_COLOR),cv2.COLOR_BGR2RGB)
+          return ImageIO(image)
   ```
-  default_desc = ('This tool can call the api of magicmaker to '
-                  'generate an image according to the given keywords.')
   
-  styles_option = [
-      'dongman',  # 动漫
-      'guofeng',  # 国风
-      'xieshi',   # 写实
-      'youhua',   # 油画
-      'manghe',   # 盲盒
-  ]
-  aspect_ratio_options = [
-      '16:9', '4:3', '3:2', '1:1',
-      '2:3', '3:4', '9:16'
-  ]
+  ---
   
-  @require('opencv-python')
-  def __init__(self,
-               style='guofeng',
-               aspect_ratio='4:3'):
-      super().__init__()
-      if style in self.styles_option:
-          self.style = style
-      else:
-          raise ValueError(f'The style must be one of {self.styles_option}')
+  **代码解释：** 
+  最后4行代码是用于从网络请求图片，并对其进行处理以便于显示或进一步处理的Python代码。下面是对每一行代码的解释：
   
-      if aspect_ratio in self.aspect_ratio_options:
-          self.aspect_ratio = aspect_ratio
-      else:
-          raise ValueError(f'The aspect ratio must be one of {aspect_ratio}')
+  1. `image_url = response.json()['data']['imgUrl']` 这行代码从一个名为 `response` 的响应对象中提取图片的URL。`response` 可能是通过发送网络请求（例如使用 `requests.get`）获得的，它包含了一个JSON格式的响应体。这里使用 `response.json()` 来解析JSON格式的响应体为Python字典，然后通过键 `data` 与 `imgUrl` 来获取图片的URL。
+    
+  2. `image_response = requests.get(image_url)` 这行代码使用 `requests` 库发起一个GET请求到上一步获取的图片URL，目的是下载图片。`image_response` 是这次请求的响应对象。
+    
+  3. `image = cv2.cvtColor(cv2.imdecode(np.frombuffer(image_response.content, np.uint8), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)` 这行代码执行了以下操作：
+    
   
-  def apply(self,
-            keywords: Annotated[str,
-                                Info('A series of Chinese keywords separated by comma.')]
-      ) -> ImageIO:
-      import cv2
-      response = requests.post(
-          url='https://magicmaker.openxlab.org.cn/gw/edit-anything/api/v1/bff/sd/generate',
-          data=json.dumps({
-              "official": True,
-              "prompt": keywords,
-              "style": self.style,
-              "poseT": False,
-              "aspectRatio": self.aspect_ratio
-          }),
-          headers={'content-type': 'application/json'}
-      )
-      image_url = response.json()['data']['imgUrl']
-      image_response = requests.get(image_url)
-      image = cv2.cvtColor(cv2.imdecode(np.frombuffer(image_response.content, np.uint8), cv2.IMREAD_COLOR),cv2.COLOR_BGR2RGB)
-      return ImageIO(image)
-  ```
+  - `image_response.content` 获取响应内容，即图片的字节流。
+    
+    - `np.frombuffer(image_response.content, np.uint8)` 将字节流转换为一个 `numpy` 数组。
+    - `cv2.imdecode(..., cv2.IMREAD_COLOR)` 使用 `cv2` (OpenCV库) 将图片的字节流解码为一个颜色的图像（默认是BGR格式）。
+    - `cv2.cvtColor(..., cv2.COLOR_BGR2RGB)` 将BGR格式的图像转换为RGB格式，因为大多数图像处理库和显示设备使用RGB色彩空间。
   
-
-```
----
-
-**代码解释：**
-
-最后4行代码是用于从网络请求图片，并对其进行处理以便于显示或进一步处理的Python代码。下面是对每一行代码的解释：
-
-1. `image_url = response.json()['data']['imgUrl']` 这行代码从一个名为 `response` 的响应对象中提取图片的URL。`response` 可能是通过发送网络请求（例如使用 `requests.get`）获得的，它包含了一个JSON格式的响应体。这里使用 `response.json()` 来解析JSON格式的响应体为Python字典，然后通过键 `data` 与 `imgUrl` 来获取图片的URL。
-
-2. `image_response = requests.get(image_url)` 这行代码使用 `requests` 库发起一个GET请求到上一步获取的图片URL，目的是下载图片。`image_response` 是这次请求的响应对象。
-
-3. `image = cv2.cvtColor(cv2.imdecode(np.frombuffer(image_response.content, np.uint8), cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)` 这行代码执行了以下操作：
-
-   - `image_response.content` 获取响应内容，即图片的字节流。
-   - `np.frombuffer(image_response.content, np.uint8)` 将字节流转换为一个 `numpy` 数组。
-   - `cv2.imdecode(..., cv2.IMREAD_COLOR)` 使用 `cv2` (OpenCV库) 将图片的字节流解码为一个颜色的图像（默认是BGR格式）。
-   - `cv2.cvtColor(..., cv2.COLOR_BGR2RGB)` 将BGR格式的图像转换为RGB格式，因为大多数图像处理库和显示设备使用RGB色彩空间。
-
-4. `return ImageIO(image)` 这行代码返回一个 `ImageIO` 对象，它可能是一个用于处理或显示图像的自定义对象或函数。这个对象或函数接收一个图像（在这里是经过处理的RGB格式的图像）作为输入。注意，`ImageIO` 并不是Python标准库或常用第三方库中的一部分，它可能是用户自定义的一个类或函数。
-
-**总结来说，这几行代码的作用是从一个网络响应中提取图片URL，下载图片，将其转换为适用于进一步处理的RGB格式图像，并最终返回一个包含该图像的对象或用于后续操作的图像数据。**
-
----
+  4. `return ImageIO(image)` 这行代码返回一个 `ImageIO` 对象，它可能是一个用于处理或显示图像的自定义对象或函数。这个对象或函数接收一个图像（在这里是经过处理的RGB格式的图像）作为输入。注意，`ImageIO` 并不是Python标准库或常用第三方库中的一部分，它可能是用户自定义的一个类或函数。 
+    **总结来说，这几行代码的作用是从一个网络响应中提取图片URL，下载图片，将其转换为适用于进一步处理的RGB格式图像，并最终返回一个包含该图像的对象或用于后续操作的图像数据。
+  
+  ---
+  
 
 2. **注册新工具**：修改 `/root/agent/agentlego/agentlego/tools/__init__.py` 文件，将我们的工具注册在工具列表中。(将 MagicMakerImageGeneration 通过 from .magicmaker_image_generation import MagicMakerImageGeneration 导入到了文件中，并且将其加入了 __all__ 列表中。)
-```
-
-# 加入
-
-from .magicmaker_image_generation import MagicMakerImageGeneration
-
-# 将__all__中'BaseTool'增加MagicMakerImageGeneration
-
-['BaseTool', 'make_tool', 'BingSearch', 'MagicMakerImageGeneration']
-
-````
+  
+  ```powershell
+  # 引入MagicMakerImageGeneration
+  
+  from .magicmaker_image_generation import MagicMakerImageGeneration
+  
+  # 将__all__中'BaseTool'增加MagicMakerImageGeneration
+  
+  ['BaseTool', 'make_tool', 'BingSearch', 'MagicMakerImageGeneration']
+  ```
+  
 3. **使用LMDeploy部署**
-
-```powershell
-conda activate agent
-lmdeploy serve api_server /root/share/new_models/Shanghai_AI_Laboratory/internlm2-chat-7b \
-                            --server-name 127.0.0.1 \
-                            --model-name internlm2-chat-7b \
-                            --cache-max-entry-count 0.1
-````
+  
+  ```powershell
+  conda activate agent
+  lmdeploy serve api_server /root/share/new_models/Shanghai_AI_Laboratory/internlm2-chat-7b \
+   --server-name 127.0.0.1 \
+   --model-name internlm2-chat-7b \
+   --cache-max-entry-count 0.1
+  ```
+  
 
 4. **在一个新的terminal启动AgentLego WebUI**:
   
@@ -595,12 +590,12 @@ lmdeploy serve api_server /root/share/new_models/Shanghai_AI_Laboratory/internlm
   
   `画一张小猪佩奇大战变形金刚的图片`：**小猪佩奇画的不错，变形金刚一言难尽**
   
-  ![屏幕截图 2024-04-23 120354](https://github.com/Hoder-zyf/InternLM/assets/73508057/755bd0fe-6487-425e-97a4-2d9b1f2db7f3)
+  ![屏幕截图 2024-04-23 120354](https://github.com/Hoder-zyf/InternLM/assets/73508057/495a1417-3d06-45e5-ab6b-4701d36f18c0)
 
   
   `画一个女生，身姿曼妙，戴着面纱，眼睛是蓝色的`
   
-![屏幕截图 2024-04-23 121049](https://github.com/Hoder-zyf/InternLM/assets/73508057/b240b85c-151f-4e87-8f54-83fc317fe2f0)
-
-
   **应该和默认国风有关系，要求都满足了，但是感觉看上去有点让人害怕，而且不知道为什么会连续生成两张一模一样的照片**
+
+   ![屏幕截图 2024-04-23 121049](https://github.com/Hoder-zyf/InternLM/assets/73508057/a32632e7-bcc5-42bc-9258-fb8d8528e631)
+
